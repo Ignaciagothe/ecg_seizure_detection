@@ -1,0 +1,14 @@
+           
+data/
+data_ecg/
+runs/
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+.env/
+*.png
+*.jpg
+*.jpeg
+.DS_Store
