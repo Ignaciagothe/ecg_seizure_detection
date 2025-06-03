@@ -12,3 +12,5 @@ env/
 *.jpg
 *.jpeg
 .DS_Store
+ecg_seizure_summary.csv
+“ecg_seizure_summary.csv”
