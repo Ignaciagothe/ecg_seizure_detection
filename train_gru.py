@@ -157,7 +157,13 @@ def main(args):
     )
 
     # --- DataLoaders ---
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    # Respect requested device if available, otherwise fall back to CPU
+    if args.device == "cuda" and torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif args.device == "mps" and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
