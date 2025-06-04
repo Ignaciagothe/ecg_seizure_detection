@@ -19,7 +19,13 @@ def compute_and_save_embeddings(
     - npz_path: path to windows_{train,val,test}.npz
     - out_dir: where to write embeddings_{train,val,test}.npz
     """
-    device = torch.device(device if torch.cuda.is_available() else "cpu")
+    # Select device more robustly: respect requested device if available
+    if device == "cuda" and torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif device == "mps" and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     # 1) Reconstruct the exact same InceptionTimeSE architecture you used in train.py.
     window_encoder = InceptionTimeSE(
         n_blocks=6,           # or use args if you want CLI flexibility
