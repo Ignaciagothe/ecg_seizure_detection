@@ -5,7 +5,7 @@ This repository contains research code for detecting epileptic seizures from sin
 
 
 
-Implementation of InceptionTime with SE is found in src/models/inception.py. Each InceptionBlock applies multiple 1‑D convolutions with different kernel sizes, optional squeeze‑excitation, residual connections, and dropout. The final classifier performs global average pooling followed by a linear layer, and there is also an unused HierarchicalSeizureModel that combines the window encoder with a GRU or LSTM for sequence modeling
+Implementation of InceptionTime with SE is found in `src/models/inception.py`. Each `InceptionBlock` applies multiple 1-D convolutions with different kernel sizes, optional squeeze-excitation, residual connections and dropout. The final classifier performs global average pooling followed by a linear layer. The repository also includes a `HierarchicalSeizureModel` that pairs the window encoder with a GRU, LSTM or Transformer sequence module; this model can be trained end-to-end via `train_hierarchical.py`
 
 src/models/tcn.py defines a dilated, causal TCN with several TemporalBlock layers that include residual connections and dropout, followed by global average pooling and a linear head
 
@@ -19,14 +19,12 @@ A separate script (compute_embeddings.py) loads a pretrained InceptionTime model
 - InceptionTime with SE and residual connections is well-suited for 1‑D ECG signals, capturing local patterns through multiple kernel sizes.
 
 - The dilated causal TCN similarly handles sequential data efficiently and can model long-range dependencies through dilation.
-
-- The pipeline optionally combines window-level embeddings with a GRU to incorporate longer context, which is a common design for sequential decision making.
-- The current workflow first trains a window classifier, saves embeddings, and then trains a GRU. It might be more effective to train the full hierarchical model end‑to‑end (the unused HierarchicalSeizureModel could be adapted for this), so that the window encoder learns representations tailored for the downstream GRU.
+- The pipeline optionally combines window-level embeddings with a GRU or Transformer to incorporate longer context.
+- You can still train the window classifier and sequence model separately, but `train_hierarchical.py` now supports training them jointly so the encoder learns features suited to the downstream sequence model.
 
 
 ### Further improvements /next steps include 
 
-- integrating the hierarchical model end‑to‑end
 - experimenting with attention-based architectures 
 - self-supervised learning:
 
@@ -34,7 +32,7 @@ A separate script (compute_embeddings.py) loads a pretrained InceptionTime model
 
 - Consider augmenting training with band-pass filtering, STFT-based spectrogram inputs, or other feature representations if the raw single-lead signal is noisy.
 
-- When computing embeddings in compute_embeddings.py, hyperparameters are hard-coded. Loading the stored hyperparameters from hparams.json ensures consistency with the training configuration.
+- When computing embeddings, the script reads the saved hyperparameters from `hparams.json` so the architecture matches the training configuration.
 
 ### Alternative approaches:
 
@@ -150,5 +148,14 @@ given directory.
 
 ## Hierarchical model
 `train_hierarchical.py` trains the window encoder and sequence model jointly on sequences of raw windows. It supports GRU, LSTM or Transformer backbones for the temporal component.
+
+```bash
+python train_hierarchical.py \
+  --train_npz data/processed/windows_train.npz \
+  --val_npz data/processed/windows_val.npz \
+  --test_npz data/processed/windows_test.npz \
+  --seq_len 6 \
+  --out_dir runs/hier
+```
 
 
