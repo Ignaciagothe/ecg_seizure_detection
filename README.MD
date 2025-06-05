@@ -11,7 +11,7 @@ Training is done via train.py, which allows choosing between the InceptionTime a
 A separate script (compute_embeddings.py) loads a pretrained InceptionTime model, extracts embeddings for each window, and writes them to disk. These embeddings can then feed into a GRU sequence model (train_gru.py) that predicts per-window seizure probability across fixed-length sequences. The GRU training loop reports AUROC, F1, precision, recall, and accuracy metrics
 
 
-Baseline Architectures starting points for seizure detection from single-lead ECG
+### Baseline Architectures (starting points for seizure detection from single-lead ECG):
 
 - InceptionTime with SE and residual connections is well-suited for 1‑D ECG signals, capturing local patterns through multiple kernel sizes.
 
@@ -21,7 +21,7 @@ Baseline Architectures starting points for seizure detection from single-lead EC
 - The current workflow first trains a window classifier, saves embeddings, and then trains a GRU. It might be more effective to train the full hierarchical model end‑to‑end (the unused HierarchicalSeizureModel could be adapted for this), so that the window encoder learns representations tailored for the downstream GRU.
 
 
-Further improvements /next steps include 
+### Further improvements /next steps include 
 
 - integrating the hierarchical model end‑to‑end
 - experimenting with attention-based architectures 
@@ -41,10 +41,7 @@ Alternative approaches:
 
 
 
-
-This repository contains research code for detecting epileptic seizures from single lead ECG recordings using deep learning.  The project explores window based models such as **InceptionTime** with squeeze–and–excitation as well as temporal convolutional networks (TCN).  It also includes utilities to compute window embeddings and to train a GRU sequence model on those embeddings.
-
-## Repository structure
+### Repository structure
 
 ```
 ├── compute_embeddings.py       # compute window embeddings using a trained model
@@ -58,7 +55,7 @@ This repository contains research code for detecting epileptic seizures from sin
 └── notebooks/                  # exploratory notebooks and scripts
 ```
 
-## Installation
+### Installation
 
 Create a Python environment (Python 3.8+ recommended) and install the dependencies:
 
@@ -70,7 +67,7 @@ PyTorch is listed in `requirements.txt` but you may want to install a version
 that matches your system and CUDA setup. Visit <https://pytorch.org> for
 instructions.
 
-## Data preprocessing
+### Data preprocessing
 
 Raw ECG traces (CSV files) must be converted into fixed length windows before training.
 `src/preprocessing.py` scans a directory of CSV files and produces a single NPZ
@@ -88,7 +85,7 @@ python -m src.preprocessing \
 The script offers additional options such as `--neg_to_pos` to balance classes
 and `--post_margin_seconds` to trim inter‑ictal tails.
 
-## Training a window model
+### Training a window model
 
 Use `train.py` to train either the InceptionTime or TCN backbone.
 The script creates a timestamped directory with metrics CSV, the best model and
@@ -107,7 +104,7 @@ python train.py \
 After training you will find `best_model_inception.pt` (or `best_model_tcn.pt`) in
 the created run directory.
 
-## Computing embeddings
+### Computing embeddings
 
 With a trained window encoder you can extract embeddings for each window using
 `compute_embeddings.py`:
@@ -122,7 +119,7 @@ python compute_embeddings.py \
 This writes `embeddings.npy` and `labels.npy` to the output directory.
 Run it for your train/val/test NPZ files.
 
-## Sequence model with GRU
+### Sequence model with GRU
 
 `train_gru.py` trains a GRU over fixed‑length sequences of embeddings.  First
 prepare embeddings for each split as above, then run:
@@ -139,7 +136,4 @@ python train_gru.py \
 A CSV with metrics and the best checkpoint `best_gru.pt` will be saved under the
 given directory.
 
-## License
 
-This project is released under the MIT License.  See the `LICENSE` file for
-details.
