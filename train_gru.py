@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader
 from src.models.transformer import TransformerSequenceModel
 from pathlib import Path
 import csv
@@ -19,7 +19,9 @@ class EmbeddingSequenceDataset(Dataset):
         self.embeddings = np.load(embeddings_path)  # shape (N_windows, D)
         self.labels = np.load(labels_path)          # shape (N_windows,)
         if self.embeddings.shape[0] != self.labels.shape[0]:
-            raise ValueError("Embeddings and labels must have same first dimension.")
+            raise ValueError(
+                "Embeddings and labels must have same first dimension."
+            )
         self.seq_len = seq_len
         total_windows = self.embeddings.shape[0]
         # Drop remainder so that total_windows % seq_len == 0
@@ -27,8 +29,10 @@ class EmbeddingSequenceDataset(Dataset):
         self.embeddings = self.embeddings[:usable]
         self.labels = self.labels[:usable]
 
-        # Now reshape: (num_seqs, seq_len, D), and (num_seqs, seq_len)
-        self.embeddings = self.embeddings.reshape(-1, seq_len, self.embeddings.shape[1])
+        # Now reshape: (num_seqs, seq_len, D) and (num_seqs, seq_len)
+        self.embeddings = self.embeddings.reshape(
+            -1, seq_len, self.embeddings.shape[1]
+        )
         self.labels = self.labels.reshape(-1, seq_len)
 
     def __len__(self):
@@ -216,7 +220,6 @@ def main(args):
     )
 
     # --- Prepare logging ---
-    run_tag = Path(args.out_dir).name  # just the name of directory for naming
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = out_dir / "gru_metrics.csv"

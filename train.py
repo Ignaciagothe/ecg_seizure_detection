@@ -2,13 +2,14 @@
 #train.py
 from __future__ import annotations
 import argparse
-import datetime, json, random, os
-from tqdm import tqdm
-from src.models.tcn import *
-from src.models.inception import *
+import datetime
+import json
+import random
+from src.models.tcn import TCNClassifier
+from src.models.inception import InceptionTimeSE
 
 from src.datasets import ECGWindowDataset, collate_fn
-from src.utils import  train_one_epoch, evaluate, FocalLoss
+from src.utils import train_one_epoch, evaluate, FocalLoss
 from pathlib import Path
 import numpy as np
 import csv
