@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from .transformer import TransformerSequenceModel
 from typing import List, Optional
 
 
@@ -191,6 +192,14 @@ class HierarchicalSeizureModel(nn.Module):
                 hidden_size=hidden_size,
                 num_layers=num_layers,
                 batch_first=True,
+            )
+        elif seq_model_type.lower() == 'transformer':
+            self.seq_model = TransformerSequenceModel(
+                input_dim=embedding_dim,
+                num_heads=4,
+                hidden_dim=hidden_size * 2,
+                num_layers=num_layers,
+                n_classes=hidden_size,
             )
         else:
             raise ValueError(f"Unsupported seq_model_type: {seq_model_type}")

@@ -1,13 +1,14 @@
 # ECG Seizure Detection
 
-This repository contains research code for detecting epileptic seizures from single lead ECG recordings using deep learning.  The project explores window based models such as **InceptionTime** with squeeze–and–excitation as well as temporal convolutional networks (TCN).  It also includes utilities to compute window embeddings and to train a GRU sequence model on those embeddings.
+This repository contains research code for detecting epileptic seizures from single lead ECG recordings using deep learning.  The project explores window based models such as **InceptionTime** with squeeze–and–excitation as well as temporal convolutional networks (TCN).  Utilities are provided to compute window embeddings and to train sequence models (GRU or Transformer).  A hierarchical model can also be trained end‑to‑end on sequences of windows.
 
 ## Repository structure
 
 ```
 ├── compute_embeddings.py       # compute window embeddings using a trained model
 ├── train.py                    # train window classifiers (InceptionTime or TCN)
-├── train_gru.py                # train GRU on sequences of embeddings
+├── train_gru.py                # train GRU or Transformer on embeddings
+├── train_hierarchical.py       # end-to-end training on window sequences
 ├── src/
 │   ├── datasets.py             # ECGWindowDataset and DataLoader helpers
 │   ├── preprocessing.py        # utilities to create windowed NPZ datasets
@@ -44,7 +45,7 @@ python -m src.preprocessing \
 ```
 
 The script offers additional options such as `--neg_to_pos` to balance classes
-and `--post_margin_seconds` to trim inter‑ictal tails.
+and `--post_margin_seconds` to trim inter‑ictal tails. Basic band‑pass filtering is applied during preprocessing to reduce noise in the single‑lead signals.
 
 ## Training a window model
 
@@ -78,11 +79,13 @@ python compute_embeddings.py \
 ```
 
 This writes `embeddings.npy` and `labels.npy` to the output directory.
+The script automatically reads `hparams.json` from the same directory as the model
+checkpoint so that the architecture matches the one used during training.
 Run it for your train/val/test NPZ files.
 
-## Sequence model with GRU
+## Sequence models
 
-`train_gru.py` trains a GRU over fixed‑length sequences of embeddings.  First
+`train_gru.py` trains either a GRU or a lightweight Transformer over fixed‑length sequences of embeddings.  First
 prepare embeddings for each split as above, then run:
 
 ```bash
@@ -96,6 +99,10 @@ python train_gru.py \
 
 A CSV with metrics and the best checkpoint `best_gru.pt` will be saved under the
 given directory.
+
+## Hierarchical model
+
+`train_hierarchical.py` trains the window encoder and sequence model jointly on sequences of raw windows. It supports GRU, LSTM or Transformer backbones for the temporal component.
 
 ## License
 

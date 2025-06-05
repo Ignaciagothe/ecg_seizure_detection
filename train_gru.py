@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
+from src.models.transformer import TransformerSequenceModel
 from pathlib import Path
 import csv
 from tqdm import tqdm
@@ -189,12 +190,21 @@ def main(args):
     # --- Build model ---
     example_emb, _ = train_ds[0]
     input_dim = example_emb.shape[1]  # embedding_dim
-    model = GRUSequenceModel(
-        input_dim=input_dim,
-        hidden_size=args.hidden_size,
-        num_layers=args.num_layers,
-        n_classes=1,
-    ).to(device)
+    if args.model == "gru":
+        model = GRUSequenceModel(
+            input_dim=input_dim,
+            hidden_size=args.hidden_size,
+            num_layers=args.num_layers,
+            n_classes=1,
+        ).to(device)
+    else:
+        model = TransformerSequenceModel(
+            input_dim=input_dim,
+            num_heads=args.num_heads,
+            hidden_dim=args.hidden_dim,
+            num_layers=args.num_layers,
+            n_classes=1,
+        ).to(device)
 
     # --- Loss, optimizer, scheduler ---
     # If your data is imbalanced per‐window, you could compute pos_weight here, but
@@ -322,10 +332,28 @@ if __name__ == "__main__":
         help="Hidden size of the GRU.",
     )
     parser.add_argument(
+        "--model",
+        choices=["gru", "transformer"],
+        default="gru",
+        help="Sequence model type",
+    )
+    parser.add_argument(
+        "--num_heads",
+        type=int,
+        default=4,
+        help="Transformer num heads (if model=transformer)",
+    )
+    parser.add_argument(
+        "--hidden_dim",
+        type=int,
+        default=128,
+        help="Transformer feedforward dim (if model=transformer)",
+    )
+    parser.add_argument(
         "--num_layers",
         type=int,
         default=1,
-        help="Number of GRU layers.",
+        help="Number of layers in the sequence model.",
     )
     parser.add_argument(
         "--batch_size",
