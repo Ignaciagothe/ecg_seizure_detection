@@ -33,11 +33,15 @@ A separate script (compute_embeddings.py) loads a pretrained InceptionTime model
 
 - When computing embeddings in compute_embeddings.py, hyperparameters are hard-coded. Loading the stored hyperparameters from hparams.json ensures consistency with the training configuration.
 
-Alternative approaches:
+### Alternative approaches:
 
-- If computational resources allow, self-supervised pretraining (e.g., contrastive learning or masked reconstruction) on large amounts of unlabeled ECG may yield better representations for seizure detection.
+If computational resources allow, self-supervised pretraining on large amounts of unlabeled ECG:
+- Contrastive learning 
+- Masked reconstruction 
+This may yield better representations for seizure detection.
 
-- A 2‑D representation (such as spectrogram or wavelet transform) combined with lightweight 2‑D CNN or ConvLSTM architectures could also be tested.
+- A 2‑D representation (such as spectrogram or wavelet transform) combined with lightweight 2‑D CNN 
+- ConvLSTM architectures 
 
 
 
