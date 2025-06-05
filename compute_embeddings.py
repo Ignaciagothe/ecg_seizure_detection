@@ -6,6 +6,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 from src.datasets import ECGWindowDataset, collate_fn
 from src.models.inception import InceptionTimeSE  # make sure your PYTHONPATH is correct
+import json
 
 def compute_and_save_embeddings(
     model_path: Path,
@@ -13,6 +14,7 @@ def compute_and_save_embeddings(
     out_dir: Path,
     batch_size: int = 256,
     device: str = "mps",
+    hparams_path: Path | None = None,
 ):
     """
     - model_path: path to best_model_inception.pt
@@ -26,15 +28,23 @@ def compute_and_save_embeddings(
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
-    # 1) Reconstruct the exact same InceptionTimeSE architecture you used in train.py.
+    # 1) Reconstruct InceptionTimeSE architecture from stored hparams
+    if hparams_path is None:
+        hparams_path = model_path.parent / "hparams.json"
+    if hparams_path.exists():
+        with hparams_path.open() as f:
+            hp = json.load(f)
+    else:
+        hp = {}
+
     window_encoder = InceptionTimeSE(
-        n_blocks=6,           # or use args if you want CLI flexibility
+        n_blocks=hp.get("n_blocks", 6),
         in_channels=1,
-        n_classes=1,          # this is irrelevant for get_embedding()
-        out_channels=32,
-        bottleneck_channels=32,
-        kernel_sizes=[10, 20, 40],
-        use_se=True,
+        n_classes=1,
+        out_channels=hp.get("out_channels", 32),
+        bottleneck_channels=hp.get("bottleneck_channels", 32),
+        kernel_sizes=hp.get("kernel_sizes", [10, 20, 40]),
+        use_se=not hp.get("no_se", False),
         use_residual=True,
     ).to(device)
 
@@ -105,6 +115,12 @@ if __name__ == "__main__":
         default=256,
     )
     parser.add_argument(
+        "--hparams_path",
+        type=Path,
+        default=None,
+        help="Optional path to hparams.json; defaults to MODEL_DIR/hparams.json",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="mps",
@@ -118,4 +134,5 @@ if __name__ == "__main__":
         args.out_dir,
         batch_size=args.batch_size,
         device=args.device,
+        hparams_path=args.hparams_path,
     )

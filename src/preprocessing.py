@@ -3,9 +3,19 @@ import numpy as np
 import pandas as pd
 import math
 import json
+from scipy.signal import butter, filtfilt
 
 from pathlib import Path
 from tqdm import tqdm
+
+
+def bandpass_filter(signal, fs, lowcut=0.5, highcut=40.0, order=5):
+    """Apply Butterworth band-pass filter to a 1‑D numpy array."""
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype="band")
+    return filtfilt(b, a, signal)
 
 
 
@@ -79,6 +89,9 @@ def preprocess_dataset(
     for csv in tqdm(csv_files, desc="Pre‑processing", unit="file"):
         df = pd.read_csv(csv)
         voltage = df["Signal [mV]"].values.astype(np.float32)
+        # Basic noise filtering with a band-pass Butterworth filter
+        fs = 1.0 / sample_period
+        voltage = bandpass_filter(voltage, fs)
         label = df["Seizure [bool]"].values.astype(np.int64)
 
         # --- Data fixes --------------------------------------------------
