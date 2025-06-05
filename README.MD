@@ -21,7 +21,11 @@ Baseline Architectures starting points for seizure detection from single-lead EC
 - The current workflow first trains a window classifier, saves embeddings, and then trains a GRU. It might be more effective to train the full hierarchical model end‑to‑end (the unused HierarchicalSeizureModel could be adapted for this), so that the window encoder learns representations tailored for the downstream GRU.
 
 
-Further improvements next steps include integrating the hierarchical model end‑to‑end, experimenting with attention-based architectures or self-supervised learning:
+Further improvements /next steps include 
+
+- integrating the hierarchical model end‑to‑end
+- experimenting with attention-based architectures 
+- self-supervised learning:
 
 - Transformer-based sequence models have become competitive for time-series tasks and could be explored as an alternative to the GRU for capturing long-range dependencies while maintaining efficiency with lightweight architectures (e.g., temporal convolution plus attention).
 
