@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from src.models.inception import InceptionTimeSE, HierarchicalSeizureModel
 from src.models.transformer import TransformerSequenceModel
-from src.utils import train_one_epoch, evaluate, FocalLoss
+from src.utils import train_one_epoch, evaluate
 
 class WindowSequenceDataset(Dataset):
     """Create sequences of windows directly from NPZ."""
@@ -35,15 +35,6 @@ def build_model(args):
         kernel_sizes=args.kernel_sizes,
         use_se=not args.no_se,
     )
-    if args.seq_model == "transformer":
-        seq_model = TransformerSequenceModel(
-            input_dim=window_encoder.embedding_dim,
-            num_heads=args.num_heads,
-            hidden_dim=args.hidden_dim,
-            num_layers=args.num_layers,
-        )
-    else:
-        seq_model = "gru"
     model = HierarchicalSeizureModel(
         window_encoder=window_encoder,
         hidden_size=args.hidden_size,
