@@ -3,5 +3,7 @@ pyyaml
 numpy
 pandas
 scikit-learn
-matplotlib
+tqdm
 scipy
+matplotlib
+

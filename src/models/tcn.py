@@ -2,17 +2,7 @@
 from typing import List
 import torch
 from torch import nn
-"""
-models/tcn.py
 
-Backbones for 1‑D time‑series classification:
-* TCNClassifier     (causal, dilated Temporal Convolutional Network)
-
-Both expose the same forward interface that returns logits (B,).
-"""
-# ----------------------------------------------------------------------
-# Temporal Convolutional Network (causal, dilated)
-# ----------------------------------------------------------------------
 class Chomp1d(nn.Module):
     def __init__(self, chomp: int):
         super().__init__()
@@ -20,7 +10,6 @@ class Chomp1d(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x[..., :-self.chomp] if self.chomp > 0 else x
-
 
 class TemporalBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation, dropout):
@@ -50,9 +39,6 @@ class TemporalBlock(nn.Module):
 
 
 class TCNClassifier(nn.Module):
-    """
-    Dilated causal‐TCN followed by global average pooling.
-    """
     def __init__(
         self,
         in_channels: int = 1,

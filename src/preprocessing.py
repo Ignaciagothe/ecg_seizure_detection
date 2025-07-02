@@ -4,33 +4,18 @@ import pandas as pd
 import math
 import json
 from scipy.signal import butter, filtfilt
-
-from pathlib import Path
 from tqdm import tqdm
-
+from pathlib import Path
 
 def bandpass_filter(signal, fs, lowcut=0.5, highcut=40.0, order=5):
-    """Apply Butterworth band-pass filter to a 1‑D numpy array."""
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
     b, a = butter(order, [low, high], btype="band")
     return filtfilt(b, a, signal)
 
-
-
-
 def segment_trace(signal,label, window_size, stride, seizure_threshold):
-    """Slice a full‑length trace into overlapping windows.
-
-    Parameters
-    ----------
-    signal : mV samples
-    label  :  binary 0/1 per sample.
-    window_size : numero samples per window.
-    stride : hop between windows.
-    seizure_threshold :  minimum numero of seizure samples inside a window to label the window as seizure.
-    """
+    
     assert len(signal) == len(label)
     n_windows = max(1, math.floor((len(signal) - window_size) / stride) + 1)
     xs = np.empty((n_windows, window_size), dtype=np.float32)
@@ -45,7 +30,7 @@ def segment_trace(signal,label, window_size, stride, seizure_threshold):
             window = np.pad(window, (0, pad), mode="constant")
             target = np.pad(target, (0, pad), mode="constant")
         xs[i] = window
-        ys[i] = 1 if target.sum() >= seizure_threshold else 0
+        ys[i] = 1 if target.sum() > seizure_threshold else 0
     return xs, ys
 
 
@@ -58,23 +43,11 @@ def preprocess_dataset(
     seizure_threshold,
     neg_to_pos,
     post_margin_seconds: float = 0.0,
-    file_list: str | None = None
+    file_list: str | None = None,
+    low_cut: float = 0.5,
+    high_cut: float = 40.0
 ):
-    """Scan `data_dir`, convert CSVs into a single NPZ of windows + labels.
-
-    Parameters
-    ----------
-    data_dir : directory containing CSV files
-    out_path : output NPZ file path
-    sample_period : sampling period in seconds
-    window_seconds : duration of window in seconds
-    overlap : fraction overlap between windows
-    seizure_threshold : minimum number of seizure samples inside a window to label it as seizure
-    neg_to_pos : ratio of negative to positive samples to keep
-    post_margin_seconds : seconds to keep *after* the final seizure sample (default 0 → cut exactly at seizure end)
-    file_list : optional path to txt file listing CSV files to process (one per line)
-    """
-
+ 
     window_size = int(window_seconds / sample_period)
     stride = int(window_size * (1 - overlap))
 
@@ -88,23 +61,20 @@ def preprocess_dataset(
     all_x, all_y = [], []
     for csv in tqdm(csv_files, desc="Pre‑processing", unit="file"):
         df = pd.read_csv(csv)
-        voltage = df["Signal [mV]"].values.astype(np.float32)
-        # Basic noise filtering with a band-pass Butterworth filter
-        fs = 1.0 / sample_period
-        voltage = bandpass_filter(voltage, fs)
-        label = df["Seizure [bool]"].values.astype(np.int64)
+        voltage = df["Signal [mV]"].values.astype(np.float32)     
+        voltage = bandpass_filter(voltage, fs=int(1/sample_period),
+                          lowcut=low_cut, highcut=high_cut)
 
-        # --- Data fixes --------------------------------------------------
-        # 1) The first row is erroneously marked as seizure → set to 0.
+        label = df["Seizure [bool]"].values.astype(np.int64)
         if label.size > 0 and label[0] == 1:
             label[0] = 0
 
         # 2) Remove post‑ictal / inter‑ictal tail to avoid confusing the model.
-        if label.any():  # at least one seizure sample exists
-            last_sz = np.nonzero(label)[0][-1]
-            cut_idx = last_sz + int(post_margin_seconds / sample_period)
-            voltage = voltage[:cut_idx]
-            label   = label[:cut_idx]
+        # if label.any():  # at least one seizure sample exists
+        #     last_sz = np.nonzero(label)[0][-1]
+        #     cut_idx = last_sz + int(post_margin_seconds / sample_period)
+        #     voltage = voltage[:cut_idx]
+        #     label   = label[:cut_idx]
         # -----------------------------------------------------------------
 
         xs, ys = segment_trace(voltage, label,
@@ -125,6 +95,8 @@ def preprocess_dataset(
 
     x = np.vstack(all_x)
     y = np.concatenate(all_y)
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)   
     np.savez_compressed(out_path, x=x, y=y)
     print(f"Saved {x.shape[0]} windows @ {out_path}")
 
@@ -136,16 +108,20 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser("Pre‑compute ECG windows")
     p.add_argument("--data_dir", required=True, type=str)
     p.add_argument("--out_path", required=True, type=str)
-    p.add_argument("--sample_period", default=0.00390625, type=float,
+    p.add_argument("--sample_period", default=1/256, type=float,
                    help="Sampling period in seconds (default 256 Hz).")
     p.add_argument("--window_seconds", default=5.0, type=float)
     p.add_argument("--overlap", default=0, type=float)
-    p.add_argument("--seizure_threshold", default=2, type=int)
+    p.add_argument("--seizure_threshold", default=1, type=int)
     p.add_argument("--neg_to_pos", default=3.0, type=float)
     p.add_argument("--post_margin_seconds", default=0.0, type=float,
                    help="Seconds to retain after the last seizure point before cutting (default 0).")
     p.add_argument("--file_list", type=str, default=None,
                    help="Path to txt with filenames (one per line) to include.")
+    p.add_argument("--low_cut",  type=float, default=0.5)
+    p.add_argument("--high_cut", type=float, default=40.0)
+    p.add_argument("--notch",    type=float, default=None)
+
     args = p.parse_args()
 
     preprocess_dataset(
@@ -158,4 +134,38 @@ if __name__ == "__main__":
         neg_to_pos=args.neg_to_pos,
         post_margin_seconds=args.post_margin_seconds,
         file_list=args.file_list,
+        low_cut=args.low_cut,
+        high_cut=args.high_cut,
+        notch=args.notch
     )
+
+
+
+"""
+python -m src.preprocessing \
+  --data_dir data/raw_ecg \
+  --file_list data/splits/train.txt \
+  --out_path data/processed/windows_train.npz \
+  --window_seconds 5 \
+  --overlap 0 \
+  --seizure_threshold 1 \
+  --neg_to_pos 3
+
+python -m src.preprocessing \
+    --data_dir   data/raw_ecg \
+    --file_list  data/splits/val.txt \
+    --out_path   data/processed/windows_val.npz \
+    --window_seconds    5 \
+    --overlap 0 \
+    --neg_to_pos 3  \
+    --seizure_threshold 1
+
+    python -m src.preprocessing \
+    --data_dir   data/raw_ecg \
+    --file_list  data/splits/test.txt \
+    --out_path   data/processed/windows_test.npz \
+    --window_seconds    5 \
+    --overlap 0 \
+    --neg_to_pos 3 \
+    --seizure_threshold 1
+"""

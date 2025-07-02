@@ -2,30 +2,41 @@ import argparse
 from pathlib import Path
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
+import datetime
+import json
+import csv
+
+# Fix imports
 from src.models.inception import InceptionTimeSE, HierarchicalSeizureModel
 from src.models.transformer import TransformerSequenceModel
-from src.utils import train_one_epoch, evaluate
+from src.utils import FocalLoss, compute_metrics
 
 class WindowSequenceDataset(Dataset):
     """Create sequences of windows directly from NPZ."""
-    def __init__(self, npz_path: Path, seq_len: int):
+    def __init__(self, npz_path: Path, seq_len: int, stride: int = None):
         arr = np.load(npz_path)
-        x = arr["x"]
-        y = arr["y"]
-        usable = (len(y) // seq_len) * seq_len
-        self.x = x[:usable].reshape(-1, seq_len, x.shape[1])
-        self.y = y[:usable].reshape(-1, seq_len)
-
+        self.x = arr["x"]  
+        self.y = arr["y"]  
+        self.seq_len = seq_len
+        self.stride = stride if stride is not None else seq_len
+        self.sequences = []
+        for i in range(0, len(self.y) - seq_len + 1, self.stride):
+            self.sequences.append(list(range(i, i + seq_len)))
+    
     def __len__(self):
-        return self.y.shape[0]
-
+        return len(self.sequences)
+    
     def __getitem__(self, idx):
-        xb = torch.from_numpy(self.x[idx]).float().unsqueeze(1)
-        yb = torch.from_numpy(self.y[idx]).float()
-        return xb, yb
+        seq_indices = self.sequences[idx]
+        x_seq = self.x[seq_indices]  
+        y_seq = self.y[seq_indices]  
+        x_seq = x_seq[:, np.newaxis, :]
+        return torch.FloatTensor(x_seq), torch.FloatTensor(y_seq)
 
-def build_model(args):
+def build_model(args, device):
     window_encoder = InceptionTimeSE(
         n_blocks=args.n_blocks,
         in_channels=1,
@@ -33,72 +44,268 @@ def build_model(args):
         out_channels=args.out_channels,
         bottleneck_channels=args.bottleneck_channels,
         kernel_sizes=args.kernel_sizes,
-        use_se=not args.no_se,
+        use_se= args.use_se,  
     )
+    
+    if args.pretrained_inception:
+        print(f"Loading pretrained InceptionTime from {args.pretrained_inception}")
+        checkpoint = torch.load(args.pretrained_inception, map_location=device)
+        window_encoder.load_state_dict(checkpoint)
+        if args.freeze_encoder:
+            print("Freezing window encoder weights")
+            for param in window_encoder.parameters():
+                param.requires_grad = False
+    
     model = HierarchicalSeizureModel(
         window_encoder=window_encoder,
         hidden_size=args.hidden_size,
         seq_model_type=args.seq_model,
         num_layers=args.num_layers,
     )
-    if args.seq_model == "transformer":
-        model.seq_model = TransformerSequenceModel(
-            input_dim=window_encoder.embedding_dim,
-            num_heads=args.num_heads,
-            hidden_dim=args.hidden_dim,
-            num_layers=args.num_layers,
-        )
+    
     return model
 
+def train_one_epoch(model, loader, criterion, optimizer, device):
+    model.train()
+    running_loss = 0.0
+    
+    pbar = tqdm(loader, desc="Training")
+    for x_seq, y_seq in pbar:
+        x_seq = x_seq.to(device)  
+        y_seq = y_seq.to(device) 
+        optimizer.zero_grad()
+        logits = model(x_seq)
+        loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        running_loss += loss.item() * x_seq.size(0)
+        pbar.set_postfix({'loss': loss.item()})
+    
+    return running_loss / len(loader.dataset)
+
+def evaluate(model, loader, criterion, device):
+    model.eval()
+    all_preds = []
+    all_labels = []
+    total_loss = 0.0
+    
+    with torch.no_grad():
+        for x_seq, y_seq in tqdm(loader, desc="Evaluating"):
+            x_seq = x_seq.to(device)
+            y_seq = y_seq.to(device)
+            logits = model(x_seq)
+            loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
+            total_loss += loss.item() * x_seq.size(0)
+            probs = torch.sigmoid(logits)
+            all_preds.append(probs.cpu().numpy())
+            all_labels.append(y_seq.cpu().numpy())
+    
+    all_preds = np.concatenate(all_preds).reshape(-1)
+    all_labels = np.concatenate(all_labels).reshape(-1)
+
+    metrics = compute_metrics(all_labels, all_preds)
+    metrics['loss'] = total_loss / len(loader.dataset)
+    return metrics
+
 def main(args):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_ds = WindowSequenceDataset(args.train_npz, args.seq_len)
-    val_ds = WindowSequenceDataset(args.val_npz, args.seq_len)
-    test_ds = WindowSequenceDataset(args.test_npz, args.seq_len)
+    device = (
+        torch.device("mps") if torch.backends.mps.is_available() else
+        torch.device("cuda") if torch.cuda.is_available() else
+        torch.device("cpu")
+    )
+    print(f"Using device: {device}")
+    run_tag = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = args.out_dir / f"hierarchical_{run_tag}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    train_ds = WindowSequenceDataset(args.train_npz, args.seq_len, stride=args.seq_stride)
+    val_ds = WindowSequenceDataset(args.val_npz, args.seq_len, stride=args.seq_len)  # No overlap for val
+    test_ds = WindowSequenceDataset(args.test_npz, args.seq_len, stride=args.seq_len)  # No overlap for test
+    
+    print(f"Train sequences: {len(train_ds)}")
+    print(f"Val sequences: {len(val_ds)}")
+    print(f"Test sequences: {len(test_ds)}")
+    
+    train_loader = DataLoader(
+        train_ds, 
+        batch_size=args.batch_size, 
+        shuffle=True,
+        num_workers=args.num_workers
+    )
+    val_loader = DataLoader(
+        val_ds, 
+        batch_size=args.batch_size,
+        num_workers=args.num_workers
+    )
+    test_loader = DataLoader(
+        test_ds, 
+        batch_size=args.batch_size,
+        num_workers=args.num_workers
+    )
+    
+    model = build_model(args, device).to(device)
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size)
-    test_loader = DataLoader(test_ds, batch_size=args.batch_size)
+    if args.focal_gamma > 0:
+        pos_samples = train_ds.y[train_ds.y == 1].sum()
+        total_samples = len(train_ds.y)
+        pos_weight = (total_samples - pos_samples) / (pos_samples + 1e-8)
+        criterion = FocalLoss(alpha=pos_weight, gamma=args.focal_gamma)
+        print(f"Using Focal Loss with alpha={pos_weight:.2f}, gamma={args.focal_gamma}")
+    else:
+        criterion = nn.BCEWithLogitsLoss()
 
-    model = build_model(args).to(device)
+    params_to_optimize = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = torch.optim.Adam(params_to_optimize, lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=3
+    )
+    
+    metrics_path = out_dir / "metrics.csv"
+    with open(metrics_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'epoch', 'train_loss', 'val_loss', 'auroc', 'auprc', 'f1',
+            'precision', 'recall', 'accuracy', 'tn', 'fp', 'fn', 'tp'
+        ])
+    
+    best_auroc = 0.0
+    patience_counter = 0
 
-    criterion = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=3)
-
-    best = 0.0
     for epoch in range(1, args.epochs + 1):
+        print(f"\nEpoch {epoch}/{args.epochs}")
         train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
         val_metrics = evaluate(model, val_loader, criterion, device)
-        print(f"[Epoch {epoch}] train_loss={train_loss:.4f} val_auroc={val_metrics['auroc']:.3f}")
+        
+        print(f"Train Loss: {train_loss:.4f}")
+        print(f"Val Loss: {val_metrics['loss']:.4f} | AUROC: {val_metrics['auroc']:.3f} | "
+              f"AUPRC: {val_metrics['auprc']:.3f} | F1: {val_metrics['f1']:.3f}")
+        with open(metrics_path, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                epoch, f"{train_loss:.6f}", f"{val_metrics['loss']:.6f}",
+                f"{val_metrics['auroc']:.6f}", f"{val_metrics['auprc']:.6f}",
+                f"{val_metrics['f1']:.6f}", f"{val_metrics['precision']:.6f}",
+                f"{val_metrics['recall']:.6f}", f"{val_metrics['accuracy']:.6f}",
+                val_metrics['tn'], val_metrics['fp'], 
+                val_metrics['fn'], val_metrics['tp']
+            ])
+
         scheduler.step(val_metrics['loss'])
-        if val_metrics['auroc'] > best:
-            best = val_metrics['auroc']
-            torch.save(model.state_dict(), args.out_dir / "best_hier.pt")
-    model.load_state_dict(torch.load(args.out_dir / "best_hier.pt", map_location=device))
+
+        if val_metrics['auroc'] > best_auroc:
+            best_auroc = val_metrics['auroc']
+            torch.save(model.state_dict(), out_dir / 'best_model.pt')
+            patience_counter = 0
+        else:
+            patience_counter += 1
+        if patience_counter >= args.patience:
+            print("Early stopping triggered")
+            break
+    
+    print("\n" + "="*50)
+    print("Evaluating on test set...")
+    model.load_state_dict(torch.load(out_dir / 'best_model.pt', map_location=device))
     test_metrics = evaluate(model, test_loader, criterion, device)
-    print(test_metrics)
+    
+    print(f"\nTest Results:")
+    print(f"AUROC: {test_metrics['auroc']:.3f} | AUPRC: {test_metrics['auprc']:.3f}")
+    print(f"F1: {test_metrics['f1']:.3f} | Precision: {test_metrics['precision']:.3f} | "
+          f"Recall: {test_metrics['recall']:.3f}")
+    print(f"Accuracy: {test_metrics['accuracy']:.3f}")
+    print(f"TP: {test_metrics['tp']} | TN: {test_metrics['tn']} | "
+          f"FP: {test_metrics['fp']} | FN: {test_metrics['fn']}")
+    
+    with open(metrics_path, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'TEST', '-', '-',
+            f"{test_metrics['auroc']:.6f}", f"{test_metrics['auprc']:.6f}",
+            f"{test_metrics['f1']:.6f}", f"{test_metrics['precision']:.6f}",
+            f"{test_metrics['recall']:.6f}", f"{test_metrics['accuracy']:.6f}",
+            test_metrics['tn'], test_metrics['fp'], 
+            test_metrics['fn'], test_metrics['tp']
+        ])
+    
+    print(f"\nResults saved to {out_dir}")
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Train hierarchical seizure model")
+
     p.add_argument("--train_npz", type=Path, required=True)
     p.add_argument("--val_npz", type=Path, required=True)
     p.add_argument("--test_npz", type=Path, required=True)
     p.add_argument("--out_dir", type=Path, required=True)
-    p.add_argument("--seq_len", type=int, default=6)
-    p.add_argument("--batch_size", type=int, default=16)
-    p.add_argument("--epochs", type=int, default=20)
-    p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--hidden_size", type=int, default=64)
-    p.add_argument("--num_layers", type=int, default=1)
-    p.add_argument("--seq_model", choices=["gru", "lstm", "transformer"], default="gru")
-    p.add_argument("--num_heads", type=int, default=4)
-    p.add_argument("--hidden_dim", type=int, default=128)
+
     p.add_argument("--n_blocks", type=int, default=6)
     p.add_argument("--out_channels", type=int, default=32)
     p.add_argument("--bottleneck_channels", type=int, default=32)
-    p.add_argument("--kernel_sizes", type=int, nargs="*", default=[10, 20, 40])
-    p.add_argument("--no_se", action="store_true")
+    p.add_argument("--kernel_sizes", type=int, nargs="+", default=[9, 19, 39])
+    p.add_argument("--use_se", action="store_true", help="Disable SE blocks")
+    p.add_argument("--hidden_size", type=int, default=64)
+    p.add_argument("--num_layers", type=int, default=2)
+    p.add_argument("--seq_model", choices=["gru", "lstm", "transformer"], default="gru")
+    
+    p.add_argument("--seq_len", type=int, default=6, help="Number of windows per sequence")
+    p.add_argument("--seq_stride", type=int, default=1, help="Stride for training sequences")
+    
+    p.add_argument("--batch_size", type=int, default=32)
+    p.add_argument("--epochs", type=int, default=50)
+    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--focal_gamma", type=float, default=2.0, help="Focal loss gamma (0 to disable)")
+    p.add_argument("--patience", type=int, default=10)
+    p.add_argument("--num_workers", type=int, default=0)
+    
+    p.add_argument("--pretrained_inception", type=str, default=None,
+                   help="Path to pretrained InceptionTimeSE weights")
+    p.add_argument("--freeze_encoder", action="store_true",
+                   help="Freeze the window encoder weights")
+    
     args = p.parse_args()
-    args.out_dir.mkdir(parents=True, exist_ok=True)
     main(args)
+
+
+
+""""
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical \
+    --epochs 20 \
+    --lr 0.001 
+
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical_pretrained \
+    --pretrained_inception runs/20250601_045007/best_model_inception.pt \
+    --freeze_encoder \
+    --seq_len 6 \
+    --seq_stride 1 \
+    --batch_size 32 \
+    --epochs 20 \
+    --lr 0.0001 \
+    --focal_gamma 2.0 \
+    --hidden_size 64 \
+    --num_layers 2 \
+    --seq_model gru
+
+
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical_lstm \
+    --seq_len 6 \
+    --seq_stride 1 \
+    --batch_size 32 \
+    --epochs 50 \
+    --lr 0.001 \
+    --focal_gamma 2.0 \
+    --hidden_size 64 \
+    --num_layers 2 \
+    --seq_model lstm
+"""

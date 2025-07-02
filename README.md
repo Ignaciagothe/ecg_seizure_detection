@@ -35,10 +35,10 @@ Usage example:
 
 ```bash
 python -m src.preprocessing \
-    --data_dir path/to/raw_csv/ \
+    --data_dir raw_ecg \
     --out_path data/processed/windows_train.npz \
     --window_seconds 5 \
-    --overlap 0.0 \
+    --overlap 0.1 \
     --seizure_threshold 2
 ```
 
@@ -124,3 +124,83 @@ The training utilities compute AUROC, AUPRC, F1, precision, recall and accuracy 
 
 This repository is provided as an educational example.  No licence information was supplied with the original code.
 
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical \
+    --seq_len 6 \
+    --seq_stride 1 \
+    --batch_size 32 \
+    --epochs 50 \
+    --lr 0.001 \
+    --focal_gamma 2.0 \
+    --hidden_size 64 \
+    --num_layers 2 \
+    --seq_model gru
+
+# Example 2: Train with pretrained InceptionTime encoder
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical_pretrained \
+    --pretrained_inception runs/20250601_045007/best_model_inception.pt \
+    --freeze_encoder \
+    --seq_len 6 \
+    --seq_stride 1 \
+    --batch_size 32 \
+    --epochs 20 \
+    --lr 0.0001 \
+    --focal_gamma 2.0 \
+    --hidden_size 64 \
+    --num_layers 2 \
+    --seq_model gru
+
+# Example 3: Train with LSTM instead of GRU
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical_lstm \
+    --seq_len 6 \
+    --seq_stride 1 \
+    --batch_size 32 \
+    --epochs 50 \
+    --lr 0.001 \
+    --focal_gamma 2.0 \
+    --hidden_size 64 \
+    --num_layers 2 \
+    --seq_model lstm
+
+# Example 4: Train with Transformer
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical_transformer \
+    --seq_len 6 \
+    --seq_stride 1 \
+    --batch_size 16 \
+    --epochs 50 \
+    --lr 0.0005 \
+    --focal_gamma 2.0 \
+    --hidden_size 64 \
+    --num_layers 2 \
+    --seq_model transformer
+
+# Example 5: Longer sequences (12 windows = 60 seconds)
+python train_hierarchical.py \
+    --train_npz data/processed/windows_train.npz \
+    --val_npz data/processed/windows_val.npz \
+    --test_npz data/processed/windows_test.npz \
+    --out_dir runs/hierarchical_long \
+    --seq_len 12 \
+    --seq_stride 3 \
+    --batch_size 16 \
+    --epochs 50 \
+    --lr 0.001 \
+    --focal_gamma 2.0 \
+    --hidden_size 128 \
+    --num_layers 2 \
+    --seq_model gru

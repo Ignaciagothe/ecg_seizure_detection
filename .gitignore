@@ -1,6 +1,6 @@
            
 data/
-data_ecg/
+notebooks/
 runs/
 __pycache__/
 *.pyc
@@ -12,5 +12,5 @@ env/
 *.jpg
 *.jpeg
 .DS_Store
-ecg_seizure_summary.csv
-“ecg_seizure_summary.csv”
+
+
