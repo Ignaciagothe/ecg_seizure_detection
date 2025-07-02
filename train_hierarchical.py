@@ -122,8 +122,8 @@ def evaluate(model, loader, criterion, device):
 
 def main(args):
     device = (
-        torch.device("mps") if torch.backends.mps.is_available() else
         torch.device("cuda") if torch.cuda.is_available() else
+        torch.device("mps") if torch.backends.mps.is_available() else
         torch.device("cpu")
     )
     set_seed(args.seed)
@@ -261,7 +261,7 @@ if __name__ == "__main__":
     p.add_argument("--out_channels", type=int, default=32)
     p.add_argument("--bottleneck_channels", type=int, default=32)
     p.add_argument("--kernel_sizes", type=int, nargs="+", default=[9, 19, 39])
-    p.add_argument("--use_se", action="store_true", help="Disable SE blocks")
+    p.add_argument("--use_se", action="store_true", help="Enable SE blocks")
     p.add_argument("--hidden_size", type=int, default=64)
     p.add_argument("--num_layers", type=int, default=2)
     p.add_argument("--seq_model", choices=["gru", "lstm", "transformer"], default="gru")

@@ -15,6 +15,8 @@ from collections import defaultdict
 import random
 
 class FocalLoss(nn.Module):
+    """Binary focal loss with optional positive class weighting."""
+
     def __init__(self, alpha: float = 1.0, gamma: float = 2.0):
         super().__init__()
         self.alpha = alpha
@@ -23,9 +25,11 @@ class FocalLoss(nn.Module):
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         bce_loss = self.bce(logits, targets)
-        prob_t = torch.exp(-bce_loss)
-        focal_term = (1.0 - prob_t) ** self.gamma
-        loss = self.alpha * focal_term * bce_loss
+        probs = torch.sigmoid(logits)
+        p_t = probs * targets + (1 - probs) * (1 - targets)
+        alpha_factor = self.alpha * targets + (1 - targets)
+        focal_weight = alpha_factor * (1 - p_t) ** self.gamma
+        loss = focal_weight * bce_loss
         return loss.mean()
 
 
