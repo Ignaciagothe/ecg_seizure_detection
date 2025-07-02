@@ -5,14 +5,20 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+from contextlib import nullcontext
 import datetime
-import json
 import csv
+import json
 
 # Fix imports
 from src.models.inception import InceptionTimeSE, HierarchicalSeizureModel
-from src.models.transformer import TransformerSequenceModel
 from src.utils import FocalLoss, compute_metrics
+
+def set_seed(seed: int) -> None:
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 class WindowSequenceDataset(Dataset):
     """Create sequences of windows directly from NPZ."""
@@ -71,11 +77,14 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
     
     pbar = tqdm(loader, desc="Training")
     for x_seq, y_seq in pbar:
-        x_seq = x_seq.to(device)  
-        y_seq = y_seq.to(device) 
+        x_seq = x_seq.to(device)
+        y_seq = y_seq.to(device)
         optimizer.zero_grad()
-        logits = model(x_seq)
-        loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
+        context = (torch.autocast(device_type=device.type, dtype=torch.float16)
+                   if device.type != "cpu" else nullcontext())
+        with context:
+            logits = model(x_seq)
+            loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -94,8 +103,11 @@ def evaluate(model, loader, criterion, device):
         for x_seq, y_seq in tqdm(loader, desc="Evaluating"):
             x_seq = x_seq.to(device)
             y_seq = y_seq.to(device)
-            logits = model(x_seq)
-            loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
+            context = (torch.autocast(device_type=device.type, dtype=torch.float16)
+                       if device.type != "cpu" else nullcontext())
+            with context:
+                logits = model(x_seq)
+                loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
             total_loss += loss.item() * x_seq.size(0)
             probs = torch.sigmoid(logits)
             all_preds.append(probs.cpu().numpy())
@@ -114,10 +126,14 @@ def main(args):
         torch.device("cuda") if torch.cuda.is_available() else
         torch.device("cpu")
     )
+    set_seed(args.seed)
     print(f"Using device: {device}")
     run_tag = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = args.out_dir / f"hierarchical_{run_tag}"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(out_dir / "hparams.json", "w") as f:
+        json.dump(vars(args), f, indent=2)
     
     train_ds = WindowSequenceDataset(args.train_npz, args.seq_len, stride=args.seq_stride)
     val_ds = WindowSequenceDataset(args.val_npz, args.seq_len, stride=args.seq_len)  # No overlap for val
@@ -128,20 +144,23 @@ def main(args):
     print(f"Test sequences: {len(test_ds)}")
     
     train_loader = DataLoader(
-        train_ds, 
-        batch_size=args.batch_size, 
+        train_ds,
+        batch_size=args.batch_size,
         shuffle=True,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        pin_memory=device.type != "cpu",
     )
     val_loader = DataLoader(
-        val_ds, 
+        val_ds,
         batch_size=args.batch_size,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        pin_memory=device.type != "cpu",
     )
     test_loader = DataLoader(
-        test_ds, 
+        test_ds,
         batch_size=args.batch_size,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        pin_memory=device.type != "cpu",
     )
     
     model = build_model(args, device).to(device)
@@ -256,6 +275,7 @@ if __name__ == "__main__":
     p.add_argument("--focal_gamma", type=float, default=2.0, help="Focal loss gamma (0 to disable)")
     p.add_argument("--patience", type=int, default=10)
     p.add_argument("--num_workers", type=int, default=0)
+    p.add_argument("--seed", type=int, default=42)
     
     p.add_argument("--pretrained_inception", type=str, default=None,
                    help="Path to pretrained InceptionTimeSE weights")
@@ -264,48 +284,3 @@ if __name__ == "__main__":
     
     args = p.parse_args()
     main(args)
-
-
-
-""""
-python train_hierarchical.py \
-    --train_npz data/processed/windows_train.npz \
-    --val_npz data/processed/windows_val.npz \
-    --test_npz data/processed/windows_test.npz \
-    --out_dir runs/hierarchical \
-    --epochs 20 \
-    --lr 0.001 
-
-python train_hierarchical.py \
-    --train_npz data/processed/windows_train.npz \
-    --val_npz data/processed/windows_val.npz \
-    --test_npz data/processed/windows_test.npz \
-    --out_dir runs/hierarchical_pretrained \
-    --pretrained_inception runs/20250601_045007/best_model_inception.pt \
-    --freeze_encoder \
-    --seq_len 6 \
-    --seq_stride 1 \
-    --batch_size 32 \
-    --epochs 20 \
-    --lr 0.0001 \
-    --focal_gamma 2.0 \
-    --hidden_size 64 \
-    --num_layers 2 \
-    --seq_model gru
-
-
-python train_hierarchical.py \
-    --train_npz data/processed/windows_train.npz \
-    --val_npz data/processed/windows_val.npz \
-    --test_npz data/processed/windows_test.npz \
-    --out_dir runs/hierarchical_lstm \
-    --seq_len 6 \
-    --seq_stride 1 \
-    --batch_size 32 \
-    --epochs 50 \
-    --lr 0.001 \
-    --focal_gamma 2.0 \
-    --hidden_size 64 \
-    --num_layers 2 \
-    --seq_model lstm
-"""
