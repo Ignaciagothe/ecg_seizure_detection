@@ -24,8 +24,8 @@ class WindowSequenceDataset(Dataset):
     """Create sequences of windows directly from NPZ."""
     def __init__(self, npz_path: Path, seq_len: int, stride: int = None):
         arr = np.load(npz_path)
-        self.x = arr["x"]  
-        self.y = arr["y"]  
+        self.x = arr["x"]
+        self.y = arr["y"]
         self.seq_len = seq_len
         self.stride = stride if stride is not None else seq_len
         self.sequences = []
@@ -37,10 +37,11 @@ class WindowSequenceDataset(Dataset):
     
     def __getitem__(self, idx):
         seq_indices = self.sequences[idx]
-        x_seq = self.x[seq_indices]  
-        y_seq = self.y[seq_indices]  
+        x_seq = self.x[seq_indices]
+        y_seq = self.y[seq_indices]
+        seq_label = float(y_seq.max() > 0)
         x_seq = x_seq[:, np.newaxis, :]
-        return torch.FloatTensor(x_seq), torch.FloatTensor(y_seq)
+        return torch.FloatTensor(x_seq), torch.FloatTensor([seq_label])
 
 def build_model(args, device):
     window_encoder = InceptionTimeSE(
@@ -84,7 +85,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
                    if device.type != "cpu" else nullcontext())
         with context:
             logits = model(x_seq)
-            loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
+            loss = criterion(logits.view(-1), y_seq.view(-1))
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -107,7 +108,7 @@ def evaluate(model, loader, criterion, device):
                        if device.type != "cpu" else nullcontext())
             with context:
                 logits = model(x_seq)
-                loss = criterion(logits.reshape(-1), y_seq.reshape(-1))
+                loss = criterion(logits.view(-1), y_seq.view(-1))
             total_loss += loss.item() * x_seq.size(0)
             probs = torch.sigmoid(logits)
             all_preds.append(probs.cpu().numpy())
@@ -167,8 +168,8 @@ def main(args):
     print(f"Model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
     if args.focal_gamma > 0:
-        pos_samples = train_ds.y[train_ds.y == 1].sum()
-        total_samples = len(train_ds.y)
+        pos_samples = sum(train_ds.y[idx_seq].max() > 0 for idx_seq in train_ds.sequences)
+        total_samples = len(train_ds.sequences)
         pos_weight = (total_samples - pos_samples) / (pos_samples + 1e-8)
         criterion = FocalLoss(alpha=pos_weight, gamma=args.focal_gamma)
         print(f"Using Focal Loss with alpha={pos_weight:.2f}, gamma={args.focal_gamma}")

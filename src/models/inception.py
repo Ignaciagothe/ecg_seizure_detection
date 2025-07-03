@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 def conv_bn(in_channels: int, out_channels: int, kernel_size: int) -> nn.Sequential:
@@ -157,6 +157,21 @@ class InceptionTimeSE(nn.Module):
         return x
 
 
+class AttentionPool(nn.Module):
+    """Attention-based pooling over temporal dimension."""
+
+    def __init__(self, hidden_dim: int):
+        super().__init__()
+        self.attn = nn.Linear(hidden_dim, 1)
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        # x: (batch, seq_len, hidden_dim)
+        scores = self.attn(torch.tanh(x)).squeeze(-1)  # (batch, seq_len)
+        weights = torch.softmax(scores, dim=1)
+        context = torch.sum(x * weights.unsqueeze(-1), dim=1)
+        return context, weights
+
+
 class HierarchicalSeizureModel(nn.Module):
     def __init__(
         self,
@@ -181,7 +196,7 @@ class HierarchicalSeizureModel(nn.Module):
                 dropout=dropout if num_layers > 1 else 0,
                 bidirectional=True
             )
-            classifier_input_dim = hidden_size * 2  # bidirectional
+            seq_output_dim = hidden_size * 2  # bidirectional
             
         elif self.seq_model_type == 'lstm':
             self.seq_model = nn.LSTM(
@@ -192,7 +207,7 @@ class HierarchicalSeizureModel(nn.Module):
                 dropout=dropout if num_layers > 1 else 0,
                 bidirectional=True
             )
-            classifier_input_dim = hidden_size * 2  
+            seq_output_dim = hidden_size * 2
             
         elif self.seq_model_type == 'transformer':
            
@@ -202,14 +217,15 @@ class HierarchicalSeizureModel(nn.Module):
                 num_heads=4,
                 hidden_dim=hidden_size * 2,
                 num_layers=num_layers,
-                n_classes=hidden_size,  
+                n_classes=hidden_size,
                 dropout=dropout,
             )
-            classifier_input_dim = hidden_size
+            seq_output_dim = hidden_size
         else:
             raise ValueError(f"Unsupported seq_model_type: {seq_model_type}")
 
-        self.classifier = nn.Linear(classifier_input_dim, n_classes)
+        self.attention = AttentionPool(seq_output_dim)
+        self.classifier = nn.Linear(seq_output_dim, n_classes)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -225,8 +241,10 @@ class HierarchicalSeizureModel(nn.Module):
             seq_out = self.seq_model(embeddings)
         
         seq_out = self.dropout(seq_out)
-        logits = self.classifier(seq_out)  
-        
+        context, attn_weights = self.attention(seq_out)
+        context = self.dropout(context)
+        logits = self.classifier(context)
+
         if logits.size(-1) == 1:
-            return logits.squeeze(-1) 
+            return logits.squeeze(-1)
         return logits
