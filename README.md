@@ -75,6 +75,20 @@ The script also supports loading a pretrained InceptionTime encoder with `--pret
 
 `src/models/hybrid_transformer_cnn.py` implements an alternative hybrid architecture. It first applies several 1D convolutional layers to extract local features from each ECG segment. These features are enhanced by an attention‑based denoising module and fed into a Transformer encoder with positional encoding to model long‑range temporal dependencies. A fully connected layer produces the final seizure/no‑seizure prediction for the segment.
 
+### Hybrid pipeline
+
+`train_hybrid_pipeline.py` runs the entire pipeline from raw ECG CSV files using the `HybridTransformerCNN` model. Specify the directory with raw traces using `--data_dir` and an output directory with `--out_dir`. If no train/val/test splits are provided via `--splits_dir`, the script automatically creates them.
+
+Basic usage:
+
+```bash
+python train_hybrid_pipeline.py \
+    --data_dir data/raw_ecg \
+    --out_dir runs/hybrid \
+    --epochs 50 \
+    --batch_size 32
+```
+
 ## Utilities
 
 - `src/utils.py` implements training loops, metrics computation and helper functions for dataset splitting.
