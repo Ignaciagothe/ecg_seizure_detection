@@ -4,19 +4,36 @@ from torch import nn
 
 class PositionalEncoding(nn.Module):
     """Standard sinusoidal positional encoding."""
-    def __init__(self, dim: int, dropout: float = 0.1, max_len: int = 1000):
+
+    def __init__(self, dim: int, dropout: float = 0.1, max_len: int = 10000):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         position = torch.arange(0, max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, dim, 2) * (-math.log(10000.0) / dim))
+        div_term = torch.exp(
+            torch.arange(0, dim, 2) * (-math.log(10000.0) / dim)
+        )
         pe = torch.zeros(max_len, dim)
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)
-        self.register_buffer("pe", pe)
+        self.register_buffer("pe", pe.unsqueeze(0))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.pe[:, :x.size(1)]
+        if x.size(1) > self.pe.size(1):
+            # Extend positional encoding if input is longer than expected
+            extra_len = x.size(1) - self.pe.size(1)
+            position = torch.arange(
+                self.pe.size(1), self.pe.size(1) + extra_len, device=x.device
+            ).unsqueeze(1)
+            div_term = torch.exp(
+                torch.arange(0, self.pe.size(2), 2, device=x.device)
+                * (-math.log(10000.0) / self.pe.size(2))
+            )
+            extra_pe = torch.zeros(extra_len, self.pe.size(2), device=x.device)
+            extra_pe[:, 0::2] = torch.sin(position * div_term)
+            extra_pe[:, 1::2] = torch.cos(position * div_term)
+            self.pe = torch.cat([self.pe, extra_pe.unsqueeze(0)], dim=1)
+
+        x = x + self.pe[:, : x.size(1)]
         return self.dropout(x)
 
 
