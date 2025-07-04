@@ -16,7 +16,7 @@ The code is written in PyTorch and relies only on common scientific Python packa
 │   ├── datasets.py     # Dataset classes for windowed data
 │   ├── preprocessing.py# Signal filtering and window extraction
 │   ├── utils.py        # Training utilities and metrics
-│   └── models/         # InceptionTime, TCN and transformer modules
+│   └── models/         # InceptionTime, TCN, transformer and hybrid modules
 ├── train_hierarchical.py  # End‑to‑end training script
 ├── notebooks/          # Exploration notebooks and plotting helpers
 └── requirements.txt
@@ -73,10 +73,12 @@ Metrics such as AUROC, AUPRC, F1, precision, recall and accuracy are written to 
 
 The script also supports loading a pretrained InceptionTime encoder with `--pretrained_inception` and optionally freezing its weights with `--freeze_encoder`.
 
+`src/models/hybrid_transformer_cnn.py` implements an alternative hybrid architecture. It first applies several 1D convolutional layers to extract local features from each ECG segment. These features are enhanced by an attention‑based denoising module and fed into a Transformer encoder with positional encoding to model long‑range temporal dependencies. A fully connected layer produces the final seizure/no‑seizure prediction for the segment.
+
 ## Utilities
 
 - `src/utils.py` implements training loops, metrics computation and helper functions for dataset splitting.
-- `src/models/` contains the neural network modules used by the project, including the hierarchical architecture.
+- `src/models/` contains the neural network modules used by the project, including the hierarchical and new hybrid Transformer‑CNN architectures.
 
 ## License
 
