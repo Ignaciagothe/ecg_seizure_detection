@@ -34,8 +34,10 @@ class FocalLoss(nn.Module):
 
 
 def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    y_prob = y_pred  
+    y_prob = y_pred
     y_hat = (y_prob >= 0.5).astype(int)
+    cm = confusion_matrix(y_true, y_hat)
+    tn, fp, fn, tp = cm.ravel()
     metricas= {
         "auroc": roc_auc_score(y_true, y_prob),
         "auprc": average_precision_score(y_true, y_prob),
@@ -43,10 +45,10 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
         'precision' : precision_score(y_true, y_hat),
         'recall' : recall_score(y_true, y_hat),
         'accuracy' : accuracy_score(y_true, y_hat),
-        "tn": confusion_matrix(y_true, y_hat)[0, 0],
-        "fp": confusion_matrix(y_true, y_hat)[0, 1],
-        "fn": confusion_matrix(y_true, y_hat)[1, 0],
-        "tp": confusion_matrix(y_true, y_hat)[1, 1],
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "tp": tp,
     }
     return metricas
 
