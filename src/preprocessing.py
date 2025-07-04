@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import math
 import json
-from scipy.signal import butter, filtfilt
+from scipy.signal import butter, filtfilt, iirnotch
 from tqdm import tqdm
 from pathlib import Path
 
@@ -12,6 +12,10 @@ def bandpass_filter(signal, fs, lowcut=0.5, highcut=40.0, order=5):
     low = lowcut / nyq
     high = highcut / nyq
     b, a = butter(order, [low, high], btype="band")
+    return filtfilt(b, a, signal)
+
+def notch_filter(signal, fs, freq, q=30.0):
+    b, a = iirnotch(w0=freq, Q=q, fs=fs)
     return filtfilt(b, a, signal)
 
 def segment_trace(signal,label, window_size, stride, seizure_threshold):
@@ -45,7 +49,8 @@ def preprocess_dataset(
     post_margin_seconds: float = 0.0,
     file_list: str | None = None,
     low_cut: float = 0.5,
-    high_cut: float = 40.0
+    high_cut: float = 40.0,
+    notch: float | None = None
 ):
  
     window_size = int(window_seconds / sample_period)
@@ -61,8 +66,11 @@ def preprocess_dataset(
     all_x, all_y = [], []
     for csv in tqdm(csv_files, desc="Pre‑processing", unit="file"):
         df = pd.read_csv(csv)
-        voltage = df["Signal [mV]"].values.astype(np.float32)     
-        voltage = bandpass_filter(voltage, fs=int(1/sample_period),
+        voltage = df["Signal [mV]"].values.astype(np.float32)
+        fs = int(1 / sample_period)
+        if notch is not None:
+            voltage = notch_filter(voltage, fs=fs, freq=notch)
+        voltage = bandpass_filter(voltage, fs=fs,
                           lowcut=low_cut, highcut=high_cut)
 
         label = df["Seizure [bool]"].values.astype(np.int64)
@@ -70,12 +78,11 @@ def preprocess_dataset(
             label[0] = 0
 
         # 2) Remove post‑ictal / inter‑ictal tail to avoid confusing the model.
-        # if label.any():  # at least one seizure sample exists
-        #     last_sz = np.nonzero(label)[0][-1]
-        #     cut_idx = last_sz + int(post_margin_seconds / sample_period)
-        #     voltage = voltage[:cut_idx]
-        #     label   = label[:cut_idx]
-        # -----------------------------------------------------------------
+        if label.any():  # at least one seizure sample exists
+            last_sz = np.nonzero(label)[0][-1]
+            cut_idx = last_sz + int(post_margin_seconds / sample_period)
+            voltage = voltage[:cut_idx]
+            label   = label[:cut_idx]
 
         xs, ys = segment_trace(voltage, label,
                             window_size=window_size,
