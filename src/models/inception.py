@@ -150,6 +150,8 @@ class InceptionTimeSE(nn.Module):
             return logits.squeeze(-1)
         return logits
 
+
+
     def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
         for block in self.blocks:
             x = block(x)
