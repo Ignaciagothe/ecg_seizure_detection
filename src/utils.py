@@ -104,7 +104,7 @@ def key_fn(fname: Path, group):
         return "_".join(fname.stem.split("_")[:2])  # aaaaaaac_s001
     return fname.stem                             # full filename
 
-def make_split(data_dir="data/raw_ecg",val_ratio=0.10, test_ratio=0.10, group="patient", seed=42):
+def make_split(data_dir="data/raw_ecg",val_ratio=0.10, test_ratio=0.10, group="filename", seed=42):
 
     root = Path(data_dir)
     all_csvs = sorted(root.rglob("*.csv"))

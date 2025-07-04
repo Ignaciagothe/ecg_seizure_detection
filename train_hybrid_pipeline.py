@@ -232,7 +232,7 @@ if __name__ == "__main__":
 
     p.add_argument("--val_ratio", type=float, default=0.1)
     p.add_argument("--test_ratio", type=float, default=0.1)
-    p.add_argument("--split_group", choices=["patient", "session", "file"], default="patient")
+    p.add_argument("--split_group", choices=["patient", "session", "file"], default="file")
 
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--batch_size", type=int, default=32)

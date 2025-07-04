@@ -12,7 +12,7 @@ import json
 
 # Fix imports
 from src.models.inception import InceptionTimeSE, HierarchicalSeizureModel
-from src.utils import FocalLoss, compute_metrics
+from src.utils import FocalLoss, compute_metrics,evaluate
 
 def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
@@ -94,7 +94,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
     
     return running_loss / len(loader.dataset)
 
-def evaluate(model, loader, criterion, device):
+def evaluate2(model, loader, criterion, device):
     model.eval()
     all_preds = []
     all_labels = []
@@ -133,8 +133,8 @@ def main(args):
     out_dir = args.out_dir / f"hierarchical_{run_tag}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(out_dir / "hparams.json", "w") as f:
-        json.dump(vars(args), f, indent=2)
+    # with open(out_dir / "hparams.json", "w") as f:
+    #     json.dump(vars(args), f, indent=2)
     
     train_ds = WindowSequenceDataset(args.train_npz, args.seq_len, stride=args.seq_stride)
     val_ds = WindowSequenceDataset(args.val_npz, args.seq_len, stride=args.seq_len)  # No overlap for val
