@@ -1,28 +1,64 @@
-# ECG Seizure Detection
+# Detección de Crisis Epilépticas en ECG
 
-This repository provides PyTorch implementations to detect seizure events in ECG traces. It covers data preparation, model training and evaluation.
+Implementaciones en **PyTorch** para detectar eventos epilépticos a partir de registros de ECG. Incluye scripts de preprocesamiento, entrenamiento y evaluación con dos enfoques de modelo:
 
-## Repository overview
+| Enfoque | Descripción | Cuándo usar |
+|---------|-------------|-------------|
+| **Modelo jerárquico** | Extrae ventanas fijas, genera embeddings con un encoder CNN (p. ej. InceptionTime) y modela la secuencia de ventanas con un GRU/LSTM/Transformer. | Cuando ya tienes las ventanas preprocesadas y quieres experimentar con distintos modelos secuenciales. |
+| **Pipeline híbrido Transformer-CNN** | Segmenta automáticamente los archivos brutos. Un CNN aprende características locales; un Transformer (con self-attention y codificación posicional) captura dependencias de largo plazo y toma la decisión final. | Para un flujo *end-to-end* desde los CSV originales o cuando quieras evitar pasos de preprocesamiento manual. |
 
-- `src/` – datasets, preprocessing and models
-- `train_hierarchical.py` – training based on preprocessed windows
-- `train_hybrid_pipeline.py` – end‑to‑end pipeline from raw files
-- `notebooks/` – exploration and plotting helpers
-- `requirements.txt` – list of Python packages
+---
 
-Raw ECG files are not included. Each CSV should contain at least `Time [s]`, `Signal [mV]` and `Seizure [bool]` columns.
+## Tabla de contenidos
+1. [Descripción general](#descripción-general)  
+2. [Estructura del repositorio](#estructura-del-repositorio)  
+3. [Requisitos](#requisitos)  
+4. [Instalación](#instalación)  
+5. [Preparación de datos](#preparación-de-datos)  
+6. [Entrenamiento](#entrenamiento)  
+   - [Modelo jerárquico](#modelo-jerárquico)  
+   - [Pipeline híbrido Transformer-CNN](#pipeline-híbrido-transformer-cnn)  
 
-## Installation
 
-Install the required packages and a compatible PyTorch build:
+## Descripción general
+
+Este proyecto demuestra cómo detectar crisis epilépticas a partir de señales ECG de un solo electrodo. Se proporcionan:
+
+- Scripts de **preprocesamiento** para convertir trazas crudas (`*.csv`) en ventanas constantes (`*.npz`).
+- **Modelos** que combinan CNNs, RNNs y Transformers para capturar tanto la morfología local como la dinámica temporal de largo plazo.
+- Utilidades para **entrenar**, **validar** y **probar** los modelos, así como para registrar métricas y pesos.
+
+> **Nota de datos**: Los archivos ECG brutos **no** se incluyen.  
+> Cada CSV debe tener al menos las columnas `Time [s]`, `Signal [mV]`, `Seizure [bool]`.
+
+---
+
+## Estructura del repositorio
+
+```
+.
+├── src/                     # Datasets, preprocesamiento y arquitecturas
+├── train\_hierarchical.py    # Entrenamiento con ventanas preprocesadas
+├── train\_hybrid\_pipeline.py # Pipeline end-to-end desde archivos brutos
+├── notebooks/               # Exploración y visualización
+└── requirements.txt         # Dependencias de Python
+
+````
+
+
+
+## Instalación
 
 ```bash
+git clone https://github.com/Ignaciagothe/ecg_seizure_detection.git
+cd ecg_seizure_detection
 pip install -r requirements.txt
-```
+````
 
-## Data preparation
 
-Run the preprocessing script to convert raw traces into fixed length windows. The command below generates an NPZ archive containing `x` (windows) and `y` (labels) arrays.
+## Preparación de datos
+
+Convierte las trazas crudas en ventanas de 5 s (ajusta si es necesario):
 
 ```bash
 python -m src.preprocessing \
@@ -32,34 +68,32 @@ python -m src.preprocessing \
     --window_seconds 5
 ```
 
-Create separate NPZ files for training, validation and testing.
+Repite para **train**, **val** y **test**.
 
-## Training options
 
-### Hierarchical model
+## Entrenamiento
 
-Use the hierarchical script to train a sequence model on preprocessed windows:
+### Modelo jerárquico
 
 ```bash
 python train_hierarchical.py \
     --train_npz data/processed/windows_train.npz \
-    --val_npz data/processed/windows_val.npz \
-    --test_npz data/processed/windows_test.npz \
-    --out_dir runs/hierarchical
+    --val_npz   data/processed/windows_val.npz \
+    --test_npz  data/processed/windows_test.npz \
+    --out_dir   runs/hierarchical
 ```
 
-Metrics are saved to `metrics.csv` in the chosen `out_dir`. The best weights are stored as `best_model.pt`.
+* Métricas → `runs/hierarchical/metrics.csv`
+* Mejores pesos → `runs/hierarchical/best_model.pt`
 
-### Hybrid Transformer-CNN pipeline
-
-Alternatively run the hybrid pipeline on raw ECG files. The script will optionally create train/val/test splits if they are not provided.
+### Pipeline híbrido Transformer-CNN
 
 ```bash
 python train_hybrid_pipeline.py \
     --data_dir data/raw_ecg \
-    --out_dir runs/hybrid
+    --out_dir  runs/hybrid
 ```
 
-## License
+Si no existen, el script creará automáticamente los splits de **train**, **val** y **test**.
 
-This project is provided for educational purposes; no license was supplied with the original code.
+
