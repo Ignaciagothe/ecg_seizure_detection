@@ -179,11 +179,11 @@ def main(args):
         else:
             patience_counter += 1
         if patience_counter >= args.patience:
-            print("Early stopping triggered")
+            print("Paciencia gatillada")
             break
 
-    print("\n" + "=" * 50)
-    print("Evaluating on test set...")
+
+    print("Evaluar en un set de datos de prueba (nuevos)")
     model.load_state_dict(torch.load(out_dir / "best_model.pt", map_location=device))
     test_metrics = evaluate(model, test_loader, criterion, device)
 
@@ -215,9 +215,15 @@ def main(args):
     print(f"\nResults saved to {out_dir}")
 
 
+# Nota, este modelo no lo puedo entrenar sin que se me sobrepase la memoria ram y se reinicie todo 
+# Pero alcnaza a iterar aprox 3 epocas , y asi se obtienen resultado (solo para validation data)
+
+
 if __name__ == "__main__":
+   
+    
     p = argparse.ArgumentParser("Train Hybrid Transformer-CNN on raw ECG data")
-    p.add_argument("--data_dir", type=str, required=True, help="Directory with raw ECG CSV files")
+    p.add_argument("--data_dir", type=str, required=True, help="raw_ecg*CSV")
     p.add_argument("--splits_dir", type=str, default=None, help="Directory containing train/val/test.txt")
     p.add_argument("--out_dir", type=str, required=True, help="Output directory for run")
 
