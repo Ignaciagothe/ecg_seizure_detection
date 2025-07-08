@@ -83,8 +83,8 @@ def plot_all_transitions(raw_df, pre_s=5, post_s=5, max_plots=4):
 
     plt.tight_layout()
     plt.show()
-
-raw_df = pd.read_csv("/Users/ignaciagothe/Ignacia macbook/Proyecto Ecg ipre/ecg_seizure/data/raw/aaaaaaac_s002_t000.csv").iloc[1:].reset_index(drop=True)
+PATH=""
+raw_df = pd.read_csv(PATH).iloc[1:].reset_index(drop=True)
 plot_all_transitions(raw_df, pre_s=5, post_s=5, max_plots=6)
 
 
