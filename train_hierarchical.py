@@ -9,8 +9,6 @@ from contextlib import nullcontext
 import datetime
 import csv
 import json
-
-# Fix imports
 from src.models.inception import InceptionTimeSE, HierarchicalSeizureModel
 from src.utils import FocalLoss, compute_metrics,evaluate
 
@@ -21,7 +19,6 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 class WindowSequenceDataset(Dataset):
-    """Create sequences of windows directly from NPZ."""
     def __init__(self, npz_path: Path, seq_len: int, stride: int = None):
         arr = np.load(npz_path)
         self.x = arr["x"]
@@ -221,7 +218,7 @@ def main(args):
         else:
             patience_counter += 1
         if patience_counter >= args.patience:
-            print("Early stopping triggered")
+            print("Early stopping por paciencia")
             break
     
     print("\n" + "="*50)
@@ -248,10 +245,11 @@ def main(args):
             test_metrics['fn'], test_metrics['tp']
         ])
     
-    print(f"\nResults saved to {out_dir}")
+    print(f"\nResultados guardados en {out_dir}")
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser("Train hierarchical seizure model")
+    p = argparse.ArgumentParser("Para entrenamiento del modelo de dos etapas para deteccion de  seizure ")
+    print('Solo nececitas entregar al ejecutar los 4 paths siguentes, los demas puedes personalizar opcionalmentee
 
     p.add_argument("--train_npz", type=Path, required=True)
     p.add_argument("--val_npz", type=Path, required=True)
@@ -267,15 +265,15 @@ if __name__ == "__main__":
     p.add_argument("--num_layers", type=int, default=2)
     p.add_argument("--seq_model", choices=["gru", "lstm", "transformer"], default="gru")
     
-    p.add_argument("--seq_len", type=int, default=6, help="Number of windows per sequence")
-    p.add_argument("--seq_stride", type=int, default=1, help="Stride for training sequences")
+    p.add_argument("--seq_len", type=int, default=6, help="Numero de ventanas por secuencia")
+    p.add_argument("--seq_stride", type=int, default=1, help="Paso avance entre secuencias")
     
     p.add_argument("--batch_size", type=int, default=32)
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--focal_gamma", type=float, default=2.0, help="Focal loss gamma (0 to disable)")
-    p.add_argument("--patience", type=int, default=10)
-    p.add_argument("--num_workers", type=int, default=0)
+    p.add_argument("--patience", type=int, default=7)
+    p.add_argument("--num_workers", type=int, default=0) #subir a 4 por ejemplo si tienes cuda - (no macos)
     p.add_argument("--seed", type=int, default=42)
     
     p.add_argument("--pretrained_inception", type=str, default=None,
