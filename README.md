@@ -26,7 +26,7 @@ Este proyecto muestra cómo detectar crisis epilépticas a partir de señales EC
 
 - Scripts de **preprocesamiento** para convertir trazas crudas (`*.csv`) en ventanas constantes (`*.npz`).
 - **Modelos** que combinan CNNs, RNNs y Transformers para capturar tanto la morfología local como la dinámica temporal de largo plazo.
-- Utilidades para **entrenar**, **validar** y **probar** los modelos, así como para registrar métricas y pesos.
+- Script (utils) con funciones para entrenar y validar los modelos, así como para registrar las métricas y pesos durante el entrenamiento
 
 > **Nota de datos**: Los archivos ECG brutos **no** se incluyen.  
 > Cada CSV debe tener al menos las columnas `Time [s]`, `Signal [mV]`, `Seizure [bool]`.
