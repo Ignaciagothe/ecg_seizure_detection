@@ -20,9 +20,9 @@ Implementaciones en **PyTorch** para detectar eventos epilépticos a partir de r
    - [Pipeline híbrido Transformer-CNN](#pipeline-híbrido-transformer-cnn)  
 
 
-## Descripción general
+## Descripción 
 
-Este proyecto demuestra cómo detectar crisis epilépticas a partir de señales ECG de un solo electrodo. Se proporcionan:
+Este proyecto muestra cómo detectar crisis epilépticas a partir de señales ECG de un solo electrodo. Se proporcionan:
 
 - Scripts de **preprocesamiento** para convertir trazas crudas (`*.csv`) en ventanas constantes (`*.npz`).
 - **Modelos** que combinan CNNs, RNNs y Transformers para capturar tanto la morfología local como la dinámica temporal de largo plazo.
