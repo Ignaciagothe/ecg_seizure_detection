@@ -249,7 +249,7 @@ def main(args):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Para entrenamiento del modelo de dos etapas para deteccion de  seizure ")
-    print('Solo nececitas entregar al ejecutar los 4 paths siguentes, los demas puedes personalizar opcionalmentee
+    print('Solo nececitas entregar al ejecutar los 4 paths siguentes, los demas puedes personalizar opcionalmentee')
 
     p.add_argument("--train_npz", type=Path, required=True)
     p.add_argument("--val_npz", type=Path, required=True)

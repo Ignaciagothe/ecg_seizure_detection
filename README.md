@@ -96,4 +96,33 @@ python train_hybrid_pipeline.py \
 
 Si no existen, el script creará automáticamente los splits de **train**, **val** y **test**.
 
+---
+
+## 📚 Documentación Completa
+
+Para una explicación detallada de la arquitectura, algoritmos y modelos:
+
+- **[ARCHITECTURE_DOCUMENTATION.md](ARCHITECTURE_DOCUMENTATION.md)** - Documentación técnica completa
+- **[EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md)** - Resumen ejecutivo de los algoritmos
+- **[test_architectures.py](test_architectures.py)** - Script de prueba y visualización de modelos
+
+### Prueba rápida de arquitecturas:
+```bash
+python test_architectures.py
+```
+
+---
+
+## 🏗️ Arquitecturas Implementadas
+
+1. **InceptionTime + Modelo Jerárquico**: CNN multi-escala con modelado secuencial
+2. **Pipeline Híbrido Transformer-CNN**: Procesamiento end-to-end con atención
+3. **Temporal Convolutional Network (TCN)**: Convoluciones dilatadas causales  
+4. **Transformer Puro**: Modelado de secuencias con auto-atención
+
+### Métricas de evaluación:
+- **AUROC/AUPRC**: Calidad de ranking y precisión en datos desbalanceados
+- **F1/Precision/Recall**: Métricas balanceadas para aplicaciones médicas
+- **Matriz de confusión**: Análisis detallado de TP, TN, FP, FN
+
 
